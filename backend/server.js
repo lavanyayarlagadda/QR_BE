@@ -10,7 +10,6 @@ const app = express();
 // Environment variables
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://eserv-odisha.web.app";
-const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
 
 // Middleware
 app.use(cors({ origin: FRONTEND_URL }));
@@ -30,8 +29,14 @@ const upload = multer({ storage });
 // Upload PDF + generate QR code
 app.post("/upload", upload.single("pdf"), async (req, res) => {
   try {
+    // Detect backend URL dynamically
+    const protocol = req.headers["x-forwarded-proto"] || req.protocol;
+    const host = req.headers["x-forwarded-host"] || req.get("host");
+    const BACKEND_URL = `${protocol}://${host}`;
+
     const fileUrl = `${BACKEND_URL}/download/${req.file.filename}`;
     const qrCodeDataUrl = await QRCode.toDataURL(fileUrl);
+
     res.json({ fileUrl, qrCode: qrCodeDataUrl });
   } catch (err) {
     console.error(err);
@@ -53,4 +58,4 @@ app.get("/download/:filename", (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => console.log(`🚀 Backend running on ${BACKEND_URL}`));
+app.listen(PORT, () => console.log(`🚀 Backend running on port ${PORT}`));
