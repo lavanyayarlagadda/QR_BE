@@ -6,7 +6,14 @@ const QRCode = require("qrcode");
 const cors = require("cors");
 
 const app = express();
-app.use(cors({ origin: "http://localhost:5173" })); // React dev URL
+
+// Environment variables
+const PORT = process.env.PORT || 5000;
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://eserv-odisha.web.app";
+const BACKEND_URL = process.env.BACKEND_URL || `http://localhost:${PORT}`;
+
+// Middleware
+app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 
 // Create uploads folder if not exists
@@ -23,9 +30,8 @@ const upload = multer({ storage });
 // Upload PDF + generate QR code
 app.post("/upload", upload.single("pdf"), async (req, res) => {
   try {
-    const fileUrl = `http://localhost:5000/download/${req.file.filename}`;
+    const fileUrl = `${BACKEND_URL}/download/${req.file.filename}`;
     const qrCodeDataUrl = await QRCode.toDataURL(fileUrl);
-
     res.json({ fileUrl, qrCode: qrCodeDataUrl });
   } catch (err) {
     console.error(err);
@@ -36,12 +42,8 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
 // Download route (forces download)
 app.get("/download/:filename", (req, res) => {
   const filePath = path.join(uploadDir, req.params.filename);
+  if (!fs.existsSync(filePath)) return res.status(404).send("File not found");
 
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send("File not found");
-  }
-
-  // Forces download in all browsers and devices
   res.download(filePath, req.params.filename, (err) => {
     if (err) {
       console.error(err);
@@ -50,4 +52,5 @@ app.get("/download/:filename", (req, res) => {
   });
 });
 
-app.listen(5000, () => console.log("🚀 Backend running on http://localhost:5000"));
+// Start server
+app.listen(PORT, () => console.log(`🚀 Backend running on ${BACKEND_URL}`));
