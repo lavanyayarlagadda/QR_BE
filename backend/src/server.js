@@ -9,7 +9,7 @@ const app = express();
 
 // Environment variables
 const PORT = process.env.PORT || 5000;
-const FRONTEND_URL = process.env.FRONTEND_URL || "https://eserv-odisha.web.app";
+const FRONTEND_URL = process.env.FRONTEND_URL || "https://eservodisha.in";
 
 // Middleware
 app.use(cors({ origin: FRONTEND_URL }));
