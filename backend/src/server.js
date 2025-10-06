@@ -10,9 +10,11 @@ const app = express();
 // Environment variables
 const PORT = process.env.PORT || 5000;
 const FRONTEND_URL = process.env.FRONTEND_URL || "https://eservodisha.in";
+const allowedOrigins = ['https://eservodisha.in', 'http://localhost:3000'];
+app.use(cors({ origin: allowedOrigins }));
 
-// Middleware
-app.use(cors({ origin: FRONTEND_URL }));
+// // Middleware
+// app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 
 // Create uploads folder if not exists
