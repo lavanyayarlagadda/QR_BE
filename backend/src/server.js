@@ -1,4 +1,3 @@
-// server.js
 require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
@@ -9,14 +8,13 @@ const {
   PutObjectCommand,
   GetObjectCommand,
 } = require("@aws-sdk/client-s3");
-const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Allow frontend
 app.use(cors({
-  origin: "*",
+  origin: "*", // change to your frontend domain in production
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"],
 }));
@@ -59,6 +57,7 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
 
     await s3.send(new PutObjectCommand(params));
 
+    // File URL through proxy
     const fileUrl = `${SERVER_DOMAIN}/download/${encodeURIComponent(fileName)}`;
     const qrCodeDataUrl = await QRCode.toDataURL(fileUrl);
 
@@ -69,20 +68,22 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
   }
 });
 
-// Proxy download route
+// Proxy download route (non-expiring)
 app.get("/download/:fileName", async (req, res) => {
   try {
     const fileName = decodeURIComponent(req.params.fileName);
 
-    // Generate a signed URL valid for 10 minutes
     const command = new GetObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: fileName,
     });
-    const signedUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
 
-    // Redirect the client to the signed URL
-    res.redirect(signedUrl);
+    const s3Object = await s3.send(command);
+
+    // Stream S3 file to client
+    res.setHeader("Content-Type", s3Object.ContentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    s3Object.Body.pipe(res);
   } catch (err) {
     console.error("Download Error:", err);
     res.status(500).json({ error: "Failed to fetch file from S3" });
