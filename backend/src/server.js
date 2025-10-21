@@ -14,20 +14,21 @@ const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Allow frontend
 app.use(cors({
-  origin: "https://eservodisha.in/", // frontend origin
+  origin: "*",
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type"],
 }));
 app.use(express.json());
 
-// 🧠 Validate env vars
-if (!process.env.AWS_BUCKET_NAME) {
-  console.error("❌ Missing AWS_BUCKET_NAME in .env");
+// Check env
+if (!process.env.AWS_BUCKET_NAME || !process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY || !process.env.AWS_REGION) {
+  console.error("❌ Missing AWS credentials or bucket info in .env");
   process.exit(1);
 }
 
-// ⚙️ AWS S3 configuration (v3)
+// AWS S3 client
 const s3 = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -36,11 +37,14 @@ const s3 = new S3Client({
   },
 });
 
-// ⚙️ Multer to store in memory before upload
+// Multer in-memory storage
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// 📤 Upload PDF to AWS S3
+// Your domain (for generating URLs)
+const SERVER_DOMAIN = process.env.SERVER_DOMAIN || `http://localhost:${PORT}`;
+
+// Upload PDF to S3
 app.post("/upload", upload.single("pdf"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
@@ -53,14 +57,9 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
       ContentType: req.file.mimetype,
     };
 
-    // Upload to S3
-    const command = new PutObjectCommand(params);
-    await s3.send(command);
+    await s3.send(new PutObjectCommand(params));
 
-    // Generate proxy download URL (your domain + /download)
-    const fileUrl = `${process.env.SERVER_DOMAIN}/download/${fileName}`;
-
-    // Generate QR code for proxy URL
+    const fileUrl = `${SERVER_DOMAIN}/download/${encodeURIComponent(fileName)}`;
     const qrCodeDataUrl = await QRCode.toDataURL(fileUrl);
 
     res.json({ fileUrl, qrCode: qrCodeDataUrl });
@@ -70,18 +69,19 @@ app.post("/upload", upload.single("pdf"), async (req, res) => {
   }
 });
 
-// 📥 Proxy download route (fetches from S3)
+// Proxy download route
 app.get("/download/:fileName", async (req, res) => {
   try {
-    const fileName = req.params.fileName;
+    const fileName = decodeURIComponent(req.params.fileName);
 
-    // Create a short-lived signed URL (10 min)
+    // Generate a signed URL valid for 10 minutes
     const command = new GetObjectCommand({
       Bucket: process.env.AWS_BUCKET_NAME,
       Key: fileName,
     });
-
     const signedUrl = await getSignedUrl(s3, command, { expiresIn: 600 });
+
+    // Redirect the client to the signed URL
     res.redirect(signedUrl);
   } catch (err) {
     console.error("Download Error:", err);
@@ -89,6 +89,6 @@ app.get("/download/:fileName", async (req, res) => {
   }
 });
 
-app.listen(PORT, () =>
-  console.log(`🚀 Server running at ${process.env.SERVER_DOMAIN || "http://localhost:" + PORT}`)
-);
+app.listen(PORT, () => {
+  console.log(`🚀 Server running at ${SERVER_DOMAIN}`);
+});
